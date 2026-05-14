@@ -68,3 +68,12 @@ Antes de solicitar una revisión, asegúrate de:
 - [ ] Has ejecutado los tests (si existen) con `php artisan test`.
 - [ ] Tu rama está actualizada con `develop`.
 - [ ] El código sigue las reglas de estilo mencionadas arriba.
+
+## 🚀 Flujo de Trabajo (Git Flow)
+Para mantener el orden, seguimos estas reglas:
+* **main**: Solo código estable para producción.
+* **develop**: Rama principal de integración. Todo se une aquí primero.
+* **feature/**: Ramas para nuevas funcionalidades (ej. `feature/login-social`).
+
+> [!IMPORTANT]
+> Nunca hagas push directo a `develop` o `main`. Siempre abre un Pull Request.
