@@ -6,14 +6,36 @@ use App\Models\Persona;
 use App\Models\PlanificacionAnual;
 use App\Models\PlanificacionDiaria;
 use App\Repositories\Contracts\DirectorRepositoryInterface;
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class EloquentDirectorRepository extends BaseRepository implements DirectorRepositoryInterface
 {
-    private const CARGO_DIRECTOR = 'Director';
-    private const CARGO_DOCENTE  = 'Docente';
+    /**
+     * Cargos que en tu BD representan a un director.
+     */
+    private const CARGOS_DIRECTOR = [
+        'Director 1° categoria',
+        'Director 2° categoria',
+        'Director 3° categoria',
+    ];
+
+    /**
+     * Cargos que en tu BD representan a un docente.
+     */
+    private const CARGOS_DOCENTES = [
+        'Maestro',
+        'Maestro Especial Música',
+        'Maestro Especial ED. Física',
+        'Maestro Especial Plástica',
+        'Maestro Especial Tecnología',
+    ];
+
+    /**
+     * Estado pendiente.
+     */
     private const ESTADO_PENDIENTE = 'Pendiente';
 
     public function __construct(
@@ -28,17 +50,21 @@ class EloquentDirectorRepository extends BaseRepository implements DirectorRepos
     {
         return $this->model
             ->whereHas('personaCargos.cargo', function ($q) {
-                $q->where('cargo', self::CARGO_DIRECTOR);
+                $q->whereIn('cargo', self::CARGOS_DIRECTOR);
             })
             ->with([
                 'personaCargos' => function ($q) {
-                    $q->whereHas('cargo', fn($c) => $c->where('cargo', self::CARGO_DIRECTOR))
-                        ->with(['cargo', 'sitRevista']);
+                    $q->whereHas('cargo', function ($c) {
+                        $c->whereIn('cargo', self::CARGOS_DIRECTOR);
+                    })->with([
+                        'cargo',
+                        'sitRevista',
+                    ]);
                 },
             ]);
     }
 
-    public function getAll(): Collection
+    public function getAll(): EloquentCollection
     {
         return $this->queryBase()->get();
     }
@@ -57,6 +83,7 @@ class EloquentDirectorRepository extends BaseRepository implements DirectorRepos
     {
         $persona = $this->model->findOrFail($id);
         $persona->update($data);
+
         return $persona->fresh();
     }
 
@@ -70,48 +97,42 @@ class EloquentDirectorRepository extends BaseRepository implements DirectorRepos
         return $this->queryBase()->paginate($perPage);
     }
 
-    /**
-     * Obtener el primer director activo.
-     */
     public function getDirectorActivo(): ?object
     {
         return $this->queryBase()->first();
     }
 
-    /**
-     * Obtener todos los docentes del sistema para supervisión.
-     */
-    public function getDocentesBajoSupervision(): Collection
+    public function getDocentesBajoSupervision(): EloquentCollection
     {
         return $this->model
-            ->whereHas('personaCargos.cargo', fn($q) => $q->where('cargo', self::CARGO_DOCENTE))
+            ->whereHas('personaCargos.cargo', function ($q) {
+                $q->whereIn('cargo', self::CARGOS_DOCENTES);
+            })
             ->with([
                 'personaCargos' => function ($q) {
-                    $q->whereHas('cargo', fn($c) => $c->where('cargo', self::CARGO_DOCENTE))
-                        ->with([
-                            'cargo',
-                            'sitRevista',
-                            'personaCargoCursados.cursado.curso',
-                        ]);
+                    $q->whereHas('cargo', function ($c) {
+                        $c->whereIn('cargo', self::CARGOS_DOCENTES);
+                    })->with([
+                        'cargo',
+                        'sitRevista',
+                        'personaCargoCursados.cursado.curso',
+                    ]);
                 },
             ])
             ->get();
     }
 
-    /**
-     * Obtener planificaciones pendientes filtradas por tipo.
-     */
     public function getPlanificacionesPendientes(string $tipo = 'todas'): Collection
     {
         $relacionesAnual = [
             'area',
-            'estados'                              => fn($q) => $q->latest('fecha'),
+            'estados' => fn($q) => $q->latest('fecha'),
             'personaCargoCursado.personaCargo.persona',
             'personaCargoCursado.cursado.curso',
         ];
 
         $relacionesDiaria = [
-            'estados'                              => fn($q) => $q->latest('fecha'),
+            'estados' => fn($q) => $q->latest('fecha'),
             'personaCargoCursado.personaCargo.persona',
             'personaCargoCursado.cursado.curso',
         ];
@@ -120,63 +141,83 @@ class EloquentDirectorRepository extends BaseRepository implements DirectorRepos
             return $this->planAnual
                 ->estadoActual(self::ESTADO_PENDIENTE)
                 ->with($relacionesAnual)
-                ->get();
+                ->get()
+                ->map(function ($item) {
+                    $item->tipo_documento = 'anual';
+                    return $item;
+                })
+                ->values();
         }
 
         if ($tipo === 'diaria') {
             return $this->planDiaria
                 ->estadoActual(self::ESTADO_PENDIENTE)
                 ->with($relacionesDiaria)
-                ->get();
+                ->get()
+                ->map(function ($item) {
+                    $item->tipo_documento = 'diaria';
+                    return $item;
+                })
+                ->values();
         }
 
-        // 'todas': unimos ambas colecciones
         $anuales = $this->planAnual
             ->estadoActual(self::ESTADO_PENDIENTE)
             ->with($relacionesAnual)
             ->get()
-            ->each(fn($p) => $p->tipo_documento = 'anual');
+            ->map(function ($item) {
+                $item->tipo_documento = 'anual';
+                return $item;
+            });
 
         $diarias = $this->planDiaria
             ->estadoActual(self::ESTADO_PENDIENTE)
             ->with($relacionesDiaria)
             ->get()
-            ->each(fn($p) => $p->tipo_documento = 'diaria');
+            ->map(function ($item) {
+                $item->tipo_documento = 'diaria';
+                return $item;
+            });
 
-        // Merge de colecciones Eloquent
-        return $anuales->merge($diarias);
+        return $anuales
+            ->concat($diarias)
+            ->sortByDesc(function ($item) {
+                return optional($item->estados->first())->fecha;
+            })
+            ->values();
     }
 
-    /**
-     * Resumen estadístico: conteo de planificaciones por estado.
-     */
     public function getResumenEstados(): array
     {
         $anuales = DB::table('estados_anual as ea')
             ->select('ea.estado', DB::raw('COUNT(*) as total'))
             ->whereRaw('ea.fecha = (
-                SELECT MAX(ea2.fecha) FROM estados_anual ea2
+                SELECT MAX(ea2.fecha)
+                FROM estados_anual ea2
                 WHERE ea2.planificacion_anual_id = ea.planificacion_anual_id
             )')
             ->groupBy('ea.estado')
             ->get()
             ->keyBy('estado')
-            ->map(fn($r) => $r->total);
+            ->map(fn($r) => $r->total)
+            ->toArray();
 
         $diarias = DB::table('estados_diaria as ed')
             ->select('ed.estado', DB::raw('COUNT(*) as total'))
             ->whereRaw('ed.fecha = (
-                SELECT MAX(ed2.fecha) FROM estados_diaria ed2
+                SELECT MAX(ed2.fecha)
+                FROM estados_diaria ed2
                 WHERE ed2.planificacion_diaria_id = ed.planificacion_diaria_id
             )')
             ->groupBy('ed.estado')
             ->get()
             ->keyBy('estado')
-            ->map(fn($r) => $r->total);
+            ->map(fn($r) => $r->total)
+            ->toArray();
 
         return [
-            'planificaciones_anuales'  => $anuales,
-            'planificaciones_diarias'  => $diarias,
+            'planificaciones_anuales' => $anuales,
+            'planificaciones_diarias' => $diarias,
         ];
     }
 }

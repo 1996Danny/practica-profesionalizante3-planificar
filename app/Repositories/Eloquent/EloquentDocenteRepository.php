@@ -11,10 +11,15 @@ use Illuminate\Pagination\LengthAwarePaginator;
 class EloquentDocenteRepository extends BaseRepository implements DocenteRepositoryInterface
 {
     /**
-     * Valor exacto del campo 'cargo' en la tabla 'cargos'.
-     * ⚠️ Ajusta si en tu BD el valor es diferente.
+     * Cargos que en tu BD representan a un docente.
      */
-    private const CARGO = 'Docente';
+    private const CARGOS_DOCENTES = [
+        'Maestro',
+        'Maestro Especial Música',
+        'Maestro Especial ED. Física',
+        'Maestro Especial Plástica',
+        'Maestro Especial Tecnología',
+    ];
 
     public function __construct(
         Persona $model,
@@ -23,34 +28,27 @@ class EloquentDocenteRepository extends BaseRepository implements DocenteReposit
         parent::__construct($model);
     }
 
-    // ─────────────────────────────────────────────────
-    // MÉTODO PRIVADO: Eager loading estándar
-    // Centraliza las relaciones para no repetirlas
-    // ─────────────────────────────────────────────────
-
+    /**
+     * Query base reutilizable para docentes.
+     */
     private function queryBase(): \Illuminate\Database\Eloquent\Builder
     {
         return $this->model
-            // Filtramos SOLO personas con cargo 'Docente'
             ->whereHas('personaCargos.cargo', function ($q) {
-                $q->where('cargo', self::CARGO);
+                $q->whereIn('cargo', self::CARGOS_DOCENTES);
             })
             ->with([
                 'personaCargos' => function ($q) {
-                    // Cargamos solo el cargo Docente, no otros cargos
-                    $q->whereHas('cargo', fn($c) => $c->where('cargo', self::CARGO))
-                        ->with([
-                            'cargo',
-                            'sitRevista',
-                            'personaCargoCursados.cursado.curso',
-                        ]);
+                    $q->whereHas('cargo', function ($c) {
+                        $c->whereIn('cargo', self::CARGOS_DOCENTES);
+                    })->with([
+                        'cargo',
+                        'sitRevista',
+                        'personaCargoCursados.cursado.curso',
+                    ]);
                 },
             ]);
     }
-
-    // ─────────────────────────────────────────────────
-    // IMPLEMENTACIÓN DE LA INTERFAZ
-    // ─────────────────────────────────────────────────
 
     /**
      * Listar todos los docentes.
@@ -61,30 +59,33 @@ class EloquentDocenteRepository extends BaseRepository implements DocenteReposit
     }
 
     /**
-     * Obtener un docente por su persona_id con planificaciones incluidas.
+     * Obtener un docente por ID con relaciones completas.
      */
     public function findById(int $id): ?object
     {
         return $this->model
-            ->whereHas('personaCargos.cargo', fn($q) => $q->where('cargo', self::CARGO))
+            ->whereHas('personaCargos.cargo', function ($q) {
+                $q->whereIn('cargo', self::CARGOS_DOCENTES);
+            })
             ->with([
                 'personaCargos' => function ($q) {
-                    $q->whereHas('cargo', fn($c) => $c->where('cargo', self::CARGO))
-                        ->with([
-                            'cargo',
-                            'sitRevista',
-                            'personaCargoCursados.cursado.curso',
-                            'personaCargoCursados.planificacionesAnuales.estados',
-                            'personaCargoCursados.planificacionesDiarias.estados',
-                        ]);
+                    $q->whereHas('cargo', function ($c) {
+                        $c->whereIn('cargo', self::CARGOS_DOCENTES);
+                    })->with([
+                        'cargo',
+                        'sitRevista',
+                        'personaCargoCursados.cursado.curso',
+                        'personaCargoCursados.planificacionesAnuales.estados',
+                        'personaCargoCursados.planificacionesDiarias.estados',
+                    ]);
                 },
             ])
             ->find($id);
     }
 
     /**
-     * Crear un docente (crea la persona + persona_cargo).
-     * $data debe incluir: datos de persona + cargos_id + sit_revista_id.
+     * Crear una nueva persona docente.
+     * Nota: este método crea solo la persona, no persona_cargos.
      */
     public function create(array $data): object
     {
@@ -98,6 +99,7 @@ class EloquentDocenteRepository extends BaseRepository implements DocenteReposit
     {
         $persona = $this->model->findOrFail($id);
         $persona->update($data);
+
         return $persona->fresh();
     }
 
@@ -107,6 +109,7 @@ class EloquentDocenteRepository extends BaseRepository implements DocenteReposit
     public function delete(int $id): bool
     {
         $persona = $this->model->findOrFail($id);
+
         return (bool) $persona->delete();
     }
 
@@ -117,20 +120,21 @@ class EloquentDocenteRepository extends BaseRepository implements DocenteReposit
     {
         $query = $this->queryBase();
 
-        // Filtro opcional por nombre/apellido
         if (!empty($filtros['nombre'])) {
             $termino = $filtros['nombre'];
+
             $query->where(function ($q) use ($termino) {
                 $q->where('apellidos', 'LIKE', "%{$termino}%")
                     ->orWhere('nombres', 'LIKE', "%{$termino}%");
             });
         }
 
-        // Filtro por año lectivo
         if (!empty($filtros['anio_lectivo'])) {
             $query->whereHas(
                 'personaCargos.personaCargoCursados.cursado',
-                fn($q) => $q->where('anio_lectivo', $filtros['anio_lectivo'])
+                function ($q) use ($filtros) {
+                    $q->where('anio_lectivo', $filtros['anio_lectivo']);
+                }
             );
         }
 
@@ -145,7 +149,9 @@ class EloquentDocenteRepository extends BaseRepository implements DocenteReposit
         return $this->asignacion
             ->whereHas('personaCargo', function ($q) use ($personaId) {
                 $q->where('personas_id', $personaId)
-                    ->whereHas('cargo', fn($c) => $c->where('cargo', self::CARGO));
+                    ->whereHas('cargo', function ($c) {
+                        $c->whereIn('cargo', self::CARGOS_DOCENTES);
+                    });
             })
             ->with([
                 'cursado.curso',
@@ -158,21 +164,28 @@ class EloquentDocenteRepository extends BaseRepository implements DocenteReposit
     }
 
     /**
-     * Obtener docentes asignados a un cursado.
+     * Obtener docentes asignados a un cursado específico.
      */
     public function getDocentesByCursado(int $cursadoId): Collection
     {
         return $this->model
-            ->whereHas('personaCargos.cargo', fn($q) => $q->where('cargo', self::CARGO))
+            ->whereHas('personaCargos.cargo', function ($q) {
+                $q->whereIn('cargo', self::CARGOS_DOCENTES);
+            })
             ->whereHas('personaCargos.personaCargoCursados', function ($q) use ($cursadoId) {
                 $q->where('cursados_id', $cursadoId);
             })
             ->with([
                 'personaCargos' => function ($q) use ($cursadoId) {
-                    $q->with([
+                    $q->whereHas('cargo', function ($c) {
+                        $c->whereIn('cargo', self::CARGOS_DOCENTES);
+                    })->with([
                         'cargo',
-                        'personaCargoCursados' => fn($a) => $a->where('cursados_id', $cursadoId)
-                            ->with('cursado.curso'),
+                        'sitRevista',
+                        'personaCargoCursados' => function ($a) use ($cursadoId) {
+                            $a->where('cursados_id', $cursadoId)
+                                ->with('cursado.curso');
+                        },
                     ]);
                 },
             ])
@@ -185,19 +198,26 @@ class EloquentDocenteRepository extends BaseRepository implements DocenteReposit
     public function getByAnioLectivo(string $anioLectivo): Collection
     {
         return $this->model
-            ->whereHas('personaCargos.cargo', fn($q) => $q->where('cargo', self::CARGO))
+            ->whereHas('personaCargos.cargo', function ($q) {
+                $q->whereIn('cargo', self::CARGOS_DOCENTES);
+            })
             ->whereHas(
                 'personaCargos.personaCargoCursados.cursado',
-                fn($q) => $q->where('anio_lectivo', $anioLectivo)
+                function ($q) use ($anioLectivo) {
+                    $q->where('anio_lectivo', $anioLectivo);
+                }
             )
             ->with([
                 'personaCargos' => function ($q) use ($anioLectivo) {
-                    $q->with([
+                    $q->whereHas('cargo', function ($c) {
+                        $c->whereIn('cargo', self::CARGOS_DOCENTES);
+                    })->with([
                         'cargo',
                         'sitRevista',
                         'personaCargoCursados' => function ($a) use ($anioLectivo) {
-                            $a->whereHas('cursado', fn($c) => $c->where('anio_lectivo', $anioLectivo))
-                                ->with('cursado.curso');
+                            $a->whereHas('cursado', function ($c) use ($anioLectivo) {
+                                $c->where('anio_lectivo', $anioLectivo);
+                            })->with('cursado.curso');
                         },
                     ]);
                 },
@@ -226,7 +246,9 @@ class EloquentDocenteRepository extends BaseRepository implements DocenteReposit
         return $this->asignacion
             ->whereHas('personaCargo', function ($q) use ($personaId) {
                 $q->where('personas_id', $personaId)
-                    ->whereHas('cargo', fn($c) => $c->where('cargo', self::CARGO));
+                    ->whereHas('cargo', function ($c) {
+                        $c->whereIn('cargo', self::CARGOS_DOCENTES);
+                    });
             })
             ->exists();
     }

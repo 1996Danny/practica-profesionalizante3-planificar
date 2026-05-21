@@ -2,14 +2,15 @@
 
 namespace App\Repositories\Contracts;
 
-use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Support\Collection;
 
 interface DirectorRepositoryInterface extends BaseRepositoryInterface
 {
     /**
      * Obtener todos los directores registrados.
      */
-    public function getAll(): Collection;
+    public function getAll(): EloquentCollection;
 
     /**
      * Obtener el director activo del sistema.
@@ -19,7 +20,7 @@ interface DirectorRepositoryInterface extends BaseRepositoryInterface
     /**
      * Obtener todos los docentes supervisados.
      */
-    public function getDocentesBajoSupervision(): Collection;
+    public function getDocentesBajoSupervision(): EloquentCollection;
 
     /**
      * Obtener planificaciones pendientes de revisión.
@@ -29,7 +30,6 @@ interface DirectorRepositoryInterface extends BaseRepositoryInterface
 
     /**
      * Obtener resumen estadístico de planificaciones por estado.
-     * Retorna conteos agrupados por estado.
      */
     public function getResumenEstados(): array;
 }
