@@ -3,57 +3,57 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Http\Request;
 
-// Controladores que necesitan resolución específica
+// ── Controladores ─────────────────────────────────────────────────
 use App\Http\Controllers\Api\PlanificacionAnualController;
 use App\Http\Controllers\Api\PlanificacionDiariaController;
 
-// La interfaz compartida que ambos necesitan
+// ── Contratos de Repositorios ─────────────────────────────────────
 use App\Repositories\Contracts\PlanificacionRepositoryInterface;
+
+// ── Contratos de Servicios ────────────────────────────────────────
+use App\Services\Contracts\PlanificacionServiceInterface;
+use App\Services\Contracts\SupervisionServiceInterface;
+
+// ── Implementaciones de Servicios ─────────────────────────────────
+use App\Services\PlanificacionService;
+use App\Services\SupervisionService;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        /*
-         * ─────────────────────────────────────────────────────────
-         * BINDING CONTEXTUAL
-         * ─────────────────────────────────────────────────────────
-         *
-         * Problema: Dos controladores piden la misma interfaz
-         * pero necesitan implementaciones diferentes.
-         *
-         * Sintaxis:
-         *   when(¿Quién lo pide?)
-         *     ->needs(¿Qué está pidiendo?)
-         *     ->give(¿Qué le damos?)
-         * ─────────────────────────────────────────────────────────
-         */
-
-        /*
-         * Regla 1:
-         * Cuando PlanificacionAnualController pida
-         * PlanificacionRepositoryInterface...
-         * ...dale el repositorio registrado como 'planificacion.anual'
-         * (que es EloquentPlanificacionAnualRepository)
-         */
+        // ── Binding contextual de Repositorios ────────────────────────
+        // Cuando PlanificacionAnualController pida la interfaz
+        // le damos el repositorio de planificaciones anuales
         $this->app->when(PlanificacionAnualController::class)
             ->needs(PlanificacionRepositoryInterface::class)
             ->give(fn() => app('planificacion.anual'));
-        //               ↑
-        //   app('planificacion.anual') resuelve el binding
-        //   que registramos en RepositoryServiceProvider
 
-        /*
-         * Regla 2:
-         * Cuando PlanificacionDiariaController pida
-         * la MISMA interfaz...
-         * ...dale el repositorio registrado como 'planificacion.diaria'
-         * (que es EloquentPlanificacionDiariaRepository)
-         */
+        // Cuando PlanificacionDiariaController pida la interfaz
+        // le damos el repositorio de planificaciones diarias
         $this->app->when(PlanificacionDiariaController::class)
             ->needs(PlanificacionRepositoryInterface::class)
             ->give(fn() => app('planificacion.diaria'));
+
+        // ── Binding contextual de PlanificacionService ────────────────
+        // El servicio necesita DOS repositorios de planificacion:
+        // uno para anuales y otro para diarias
+        $this->app->when(PlanificacionService::class)
+            ->needs(PlanificacionRepositoryInterface::class)
+            ->give(fn() => app('planificacion.anual'));
+
+        // ── Binding de Servicios ──────────────────────────────────────
+        $this->app->bind(
+            PlanificacionServiceInterface::class,
+            PlanificacionService::class
+        );
+
+        $this->app->bind(
+            SupervisionServiceInterface::class,
+            SupervisionService::class
+        );
     }
 
     public function boot(): void {}
