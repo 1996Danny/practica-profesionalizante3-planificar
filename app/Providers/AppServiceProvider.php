@@ -3,7 +3,6 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Http\Request;
 
 // ── Controladores ─────────────────────────────────────────────────
 use App\Http\Controllers\Api\PlanificacionAnualController;
@@ -24,27 +23,36 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // ── Binding contextual de Repositorios ────────────────────────
-        // Cuando PlanificacionAnualController pida la interfaz
-        // le damos el repositorio de planificaciones anuales
+        // ──────────────────────────────────────────────────────────────
+        // BINDING CONTEXTUAL DE REPOSITORIOS PARA CONTROLADORES
+        // ──────────────────────────────────────────────────────────────
+
         $this->app->when(PlanificacionAnualController::class)
             ->needs(PlanificacionRepositoryInterface::class)
             ->give(fn() => app('planificacion.anual'));
 
-        // Cuando PlanificacionDiariaController pida la interfaz
-        // le damos el repositorio de planificaciones diarias
         $this->app->when(PlanificacionDiariaController::class)
             ->needs(PlanificacionRepositoryInterface::class)
             ->give(fn() => app('planificacion.diaria'));
 
-        // ── Binding contextual de PlanificacionService ────────────────
-        // El servicio necesita DOS repositorios de planificacion:
-        // uno para anuales y otro para diarias
+        // ──────────────────────────────────────────────────────────────
+        // BINDING CONTEXTUAL DE REPOSITORIOS PARA SERVICIOS
+        // ──────────────────────────────────────────────────────────────
+
+        // PlanificacionService necesita el repositorio anual
         $this->app->when(PlanificacionService::class)
             ->needs(PlanificacionRepositoryInterface::class)
             ->give(fn() => app('planificacion.anual'));
 
-        // ── Binding de Servicios ──────────────────────────────────────
+        // SupervisionService necesita el repositorio anual
+        $this->app->when(SupervisionService::class)
+            ->needs(PlanificacionRepositoryInterface::class)
+            ->give(fn() => app('planificacion.anual'));
+
+        // ──────────────────────────────────────────────────────────────
+        // BINDING DE SERVICIOS (Interface → Implementación)
+        // ──────────────────────────────────────────────────────────────
+
         $this->app->bind(
             PlanificacionServiceInterface::class,
             PlanificacionService::class
