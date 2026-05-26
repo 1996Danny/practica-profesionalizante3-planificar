@@ -24,6 +24,10 @@ class Persona extends Model
 
     protected $hidden = ['deleted_at'];
 
+    public function user() {
+        return $table->hasOne(User::class);
+    }
+
     // ─────────────────────────────────────────
     // RELACIONES
     // ─────────────────────────────────────────

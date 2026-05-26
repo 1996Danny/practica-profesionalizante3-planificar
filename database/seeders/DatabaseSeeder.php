@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
         $this->call(PlanificacionDiariaSeeder::class);
         $this->call(EstadosAnualSeeder::class);
         $this->call(EstadosDiariaSeeder::class);
+        $this->call(UserSeeder::class);
 
     }
 }
