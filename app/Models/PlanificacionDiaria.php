@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PlanificacionDiaria extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'planificacion_diaria';
 
     protected $fillable = [
@@ -22,9 +25,10 @@ class PlanificacionDiaria extends Model
     ];
 
     protected $casts = [
-        'fecha_estimada'    => 'date',
+        'fecha_estimada' => 'date',
         'fecha_desarrollada' => 'date',
         'fecha_presentacion' => 'date',
+        'deleted_at' => 'datetime',
     ];
 
     public function personaCargoCursado(): BelongsTo
@@ -37,16 +41,14 @@ class PlanificacionDiaria extends Model
         return $this->hasMany(EstadoDiaria::class, 'planificacion_diaria_id');
     }
 
-    /**
-     * Scope para filtrar por el último estado activo.
-     */
     public function scopeEstadoActual($query, string $estado)
     {
         return $query->whereHas('estados', function ($q) use ($estado) {
             $q->where('estado', $estado)
                 ->whereRaw('fecha = (
-                  SELECT MAX(ed2.fecha) FROM estados_diaria ed2
-                  WHERE ed2.planificacion_diaria_id = estados_diaria.planificacion_diaria_id
+                    SELECT MAX(ed2.fecha)
+                    FROM estados_diaria ed2
+                    WHERE ed2.planificacion_diaria_id = estados_diaria.planificacion_diaria_id
               )');
         });
     }

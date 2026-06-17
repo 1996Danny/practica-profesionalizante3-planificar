@@ -3,144 +3,156 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Resources\PlanificacionAnualResource;
-use App\Repositories\Contracts\PlanificacionRepositoryInterface;
+use App\Models\PlanificacionAnual;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class PlanificacionAnualController extends Controller
 {
-    public function __construct(
-        // Resuelve 'planificacion.anual' del Service Provider
-        private readonly PlanificacionRepositoryInterface $repo
-    ) {}
-
-    /**
-     * GET /api/planificaciones/anuales
-     * Parámetros opcionales:
-     *   ?docente_id=1
-     *   ?estado=Pendiente
-     *   ?area_id=2
-     *   ?anio_lectivo=2025
-     *   ?tipo_planificacion=mensual
-     */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(): JsonResponse
     {
-        $filtros = $request->only([
-            'docente_id',
-            'estado',
-            'area_id',
-            'anio_lectivo',
-            'tipo_planificacion',
-        ]);
+        $planificaciones = PlanificacionAnual::with([
+            'area',
+            'personaCargoCursado.personaCargo.persona',
+            'personaCargoCursado.cursado.curso',
+            'estados'
+        ])->get();
 
-        $planificaciones = $this->repo->paginate(15, $filtros);
-
-        return PlanificacionAnualResource::collection($planificaciones);
+        return response()->json($planificaciones);
     }
 
-    /**
-     * GET /api/planificaciones/anuales/{id}
-     */
-    public function show(int $id): PlanificacionAnualResource|JsonResponse
-    {
-        $plan = $this->repo->findById($id);
-
-        if (!$plan) {
-            return response()->json(['message' => 'Planificación no encontrada.'], 404);
-        }
-
-        return new PlanificacionAnualResource($plan);
-    }
-
-    /**
-     * GET /api/planificaciones/anuales/docente/{personaId}
-     */
-    public function porDocente(int $personaId): AnonymousResourceCollection
-    {
-        return PlanificacionAnualResource::collection(
-            $this->repo->getByDocente($personaId)
-        );
-    }
-
-    /**
-     * GET /api/planificaciones/anuales/estado/{estado}
-     * Ej: /api/planificaciones/anuales/estado/Pendiente
-     */
-    public function porEstado(string $estado): AnonymousResourceCollection
-    {
-        return PlanificacionAnualResource::collection(
-            $this->repo->getByEstado($estado)
-        );
-    }
-
-    /**
-     * POST /api/planificaciones/anuales
-     */
     public function store(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'fecha_presentacion'     => 'required|date',
-            'aprendizajes_esperados' => 'required|string',
-            'saberes'                => 'required|string',
-            'criterios'              => 'required|string',
-            'bibliografia'           => 'required|string',
-            'diagnostico'            => 'required|string',
-            'areas_id'               => 'required|exists:areas,id',
-            'persona_cargo_cursado_id' => 'required|exists:persona_cargo_cursado,id',
-            'tipo_planificacion'     => 'required|string|max:255',
-        ]);
+        try {
+            $validated = $request->validate([
+                'fecha_presentacion'       => 'required|date',
+                'aprendizajes_esperados'   => 'required|string',
+                'saberes'                  => 'required|string',
+                'criterios'                => 'required|string',
+                'bibliografia'             => 'required|string',
+                'diagnostico'              => 'required|string',
+                'areas_id'                 => 'required|exists:areas,id',
+                'persona_cargo_cursado_id' => 'required|exists:persona_cargo_cursado,id',
+                'tipo_planificacion'       => 'required|string|max:255',
+            ]);
 
-        $plan = $this->repo->create($validated);
+            $planificacion = new PlanificacionAnual();
+            $planificacion->fecha_presentacion = $validated['fecha_presentacion'];
+            $planificacion->aprendizajes_esperados = $validated['aprendizajes_esperados'];
+            $planificacion->saberes = $validated['saberes'];
+            $planificacion->criterios = $validated['criterios'];
+            $planificacion->bibliografia = $validated['bibliografia'];
+            $planificacion->diagnostico = $validated['diagnostico'];
+            $planificacion->areas_id = $validated['areas_id'];
+            $planificacion->persona_cargo_cursado_id = $validated['persona_cargo_cursado_id'];
+            $planificacion->tipo_planificacion = $validated['tipo_planificacion'];
+            $planificacion->save();
 
-        return response()->json([
-            'message' => 'Planificación anual creada correctamente.',
-            'data'    => new PlanificacionAnualResource($this->repo->findById($plan->id)),
-        ], 201);
+            return response()->json([
+                'Mensaje' => 'Planificación anual creada correctamente',
+                'data' => $planificacion
+            ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'Mensaje' => 'Error de validación',
+                'Errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'Mensaje' => 'Error al crear',
+                'Error' => $e->getMessage()
+            ], 500);
+        }
     }
 
-    /**
-     * PUT /api/planificaciones/anuales/{id}
-     */
+    public function show(int $id): JsonResponse
+    {
+        $planificacion = PlanificacionAnual::with([
+            'area',
+            'personaCargoCursado.personaCargo.persona',
+            'personaCargoCursado.cursado.curso',
+            'estados'
+        ])->find($id);
+
+        if (!$planificacion) {
+            return response()->json([
+                'message' => 'Planificación no encontrada'
+            ], 404);
+        }
+
+        return response()->json($planificacion);
+    }
+
     public function update(Request $request, int $id): JsonResponse
     {
-        $plan = $this->repo->findById($id);
+        $planificacion = PlanificacionAnual::find($id);
 
-        if (!$plan) {
-            return response()->json(['message' => 'Planificación no encontrada.'], 404);
+        if (!$planificacion) {
+            return response()->json([
+                'Mensaje' => 'Planificación no encontrada'
+            ], 404);
         }
 
         $validated = $request->validate([
-            'fecha_presentacion'     => 'sometimes|date',
-            'aprendizajes_esperados' => 'sometimes|string',
-            'saberes'                => 'sometimes|string',
-            'criterios'              => 'sometimes|string',
-            'bibliografia'           => 'sometimes|string',
-            'diagnostico'            => 'sometimes|string',
-            'areas_id'               => 'sometimes|exists:areas,id',
-            'tipo_planificacion'     => 'sometimes|string|max:255',
+            'fecha_presentacion'       => 'sometimes|date',
+            'aprendizajes_esperados'   => 'sometimes|string',
+            'saberes'                  => 'sometimes|string',
+            'criterios'                => 'sometimes|string',
+            'bibliografia'             => 'sometimes|string',
+            'diagnostico'              => 'sometimes|string',
+            'areas_id'                 => 'sometimes|exists:areas,id',
+            'persona_cargo_cursado_id' => 'sometimes|exists:persona_cargo_cursado,id',
+            'tipo_planificacion'       => 'sometimes|string|max:255',
         ]);
 
-        $planActualizado = $this->repo->update($id, $validated);
+        $planificacion->update($validated);
 
         return response()->json([
-            'message' => 'Planificación actualizada.',
-            'data'    => new PlanificacionAnualResource($planActualizado),
+            'Mensaje' => 'Actualizado correctamente',
+            'data' => $planificacion
         ]);
     }
 
-    /**
-     * DELETE /api/planificaciones/anuales/{id}
-     */
     public function destroy(int $id): JsonResponse
     {
-        if (!$this->repo->findById($id)) {
-            return response()->json(['message' => 'Planificación no encontrada.'], 404);
+        $planificacion = PlanificacionAnual::find($id);
+
+        if (!$planificacion) {
+            return response()->json([
+                'mensaje' => 'No encontrada'
+            ], 404);
         }
 
-        $this->repo->delete($id);
+        $planificacion->delete();
 
-        return response()->json(['message' => 'Planificación eliminada correctamente.']);
+        return response()->json([
+            'Mensaje' => 'Ocultada correctamente'
+        ]);
+    }
+
+    public function trashed(): JsonResponse
+    {
+        $ocultas = PlanificacionAnual::onlyTrashed()
+            ->with(['area', 'personaCargoCursado.personaCargo.persona'])
+            ->get();
+
+        return response()->json($ocultas);
+    }
+
+    public function restore(int $id): JsonResponse
+    {
+        $planificacion = PlanificacionAnual::onlyTrashed()->find($id);
+
+        if (!$planificacion) {
+            return response()->json([
+                'mensaje' => 'No encontrada'
+            ], 404);
+        }
+
+        $planificacion->restore();
+
+        return response()->json([
+            'Mensaje' => 'Restaurada correctamente'
+        ]);
     }
 }
