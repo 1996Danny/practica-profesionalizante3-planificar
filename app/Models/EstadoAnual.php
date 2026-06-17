@@ -19,6 +19,26 @@ class EstadoAnual extends Model
         'fecha' => 'date',
     ];
 
+    // ─────────────────────────────────────────
+    // CONSTANTES DE ESTADOS
+    // ─────────────────────────────────────────
+    const BORRADOR    = 'BORRADOR';
+    const EN_REVISION = 'EN_REVISION';
+    const APROBADO    = 'APROBADO';
+
+    // ─────────────────────────────────────────
+    // TRANSICIONES PERMITIDAS
+    // Desde cada estado, a qué estados se puede ir
+    // ─────────────────────────────────────────
+    const TRANSICIONES = [
+        self::BORRADOR    => [self::EN_REVISION],
+        self::EN_REVISION => [self::APROBADO, self::BORRADOR],
+        self::APROBADO    => [], // Estado final, no hay transición
+    ];
+
+    // ─────────────────────────────────────────
+    // RELACIONES
+    // ─────────────────────────────────────────
     public function planificacionAnual(): BelongsTo
     {
         return $this->belongsTo(PlanificacionAnual::class, 'planificacion_anual_id');
