@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Persona extends Model
 {
@@ -16,7 +17,7 @@ class Persona extends Model
         'apellidos',
         'nombres',
         'dni',
-        'e-mail',       // ← campo con guión, se mapea normalmente
+        'e-mail',
         'telefono',
         'direccion',
         'fecha_nacimiento',
@@ -24,28 +25,35 @@ class Persona extends Model
 
     protected $hidden = ['deleted_at'];
 
-    public function user() {
-        return $table->hasOne(User::class);
-    }
-
     // ─────────────────────────────────────────
     // RELACIONES
     // ─────────────────────────────────────────
 
-    /**
-     * Una persona puede tener muchos cargos asignados.
-     */
+    public function user(): HasOne
+    {
+        return $this->hasOne(User::class);
+    }
+
     public function personaCargos(): HasMany
     {
         return $this->hasMany(PersonaCargo::class, 'personas_id');
     }
 
     // ─────────────────────────────────────────
-    // ACCESSORS (para manejar el campo 'e-mail')
+    // ACCESSORS
     // ─────────────────────────────────────────
 
     /**
-     * Accessor para acceder al email sin usar la sintaxis de guión.
+     * Accessor principal para el email
+     * Uso: $persona->email
+     */
+    public function getEmailAttribute(): string
+    {
+        return $this->attributes['e-mail'] ?? '';
+    }
+
+    /**
+     * Accessor alternativo
      * Uso: $persona->email_address
      */
     public function getEmailAddressAttribute(): string

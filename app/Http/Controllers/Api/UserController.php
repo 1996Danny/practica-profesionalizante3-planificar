@@ -1,14 +1,16 @@
 <?php
 
-namespace App\Http\Controllers\API;
+namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 
-class UserController extends Controller {
-    
-    public function assignRole(Request $request, $id) {
+class UserController extends Controller
+{
+
+    public function assignRole(Request $request, $id)
+    {
         $request->validate([
             'role' => 'required|in:admin,director,docente,user'
         ]);
@@ -28,7 +30,7 @@ class UserController extends Controller {
             if ($target_user->role === 'admin') {
                 return response()->json(['message' => 'No tienes permisos para modificar a otro administrador.'], 403);
             }
-            
+
             $target_user->role = $new_role;
             $target_user->save();
             return response()->json(['message' => "Rol actualizado a {$new_role} correctamente."]);

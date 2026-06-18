@@ -9,27 +9,40 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 
-class AuthController extends Controller {
-    
-    public function register(Request $request) {
+class AuthController extends Controller
+{
+
+    public function register(Request $request)
+    {
+
         $validator = Validator::make($request->all(), [
-            'nombre' => 'required|string|max:255',
-            'apellido' => 'required|string|max:255',
+            'nombres' => 'required|string|max:255',
+            'apellidos' => 'required|string|max:255',
+            'dni' => 'required|string|unique:personas,dni',
+            'telefono' => 'required|string',
+            'direccion' => 'required|string',
+            'fecha_nacimiento' => 'required|date',
             'name' => 'required|string|max:255|unique:users',
-            'email' => 'required|string|email|max:255|unique:users',
+            'email' => 'required|string|email|max:255|unique:users|unique:personas,e-mail',
             'password' => 'required|string|min:8',
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return response()->json($validator->errors(), 422);
         }
 
+        // ✅ Crear persona correctamente
         $persona = Persona::create([
-            'nombre' => $request->nombre,
-            'apellido' => $request->apellido,
+            'nombres' => $request->nombres,
+            'apellidos' => $request->apellidos,
+            'dni' => $request->dni,
+            'e-mail' => $request->email,   // campo con guion en BD
+            'telefono' => $request->telefono,
+            'direccion' => $request->direccion,
+            'fecha_nacimiento' => $request->fecha_nacimiento,
         ]);
 
-       // rol 'user' por defecto
+        // ✅ Crear usuario
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
@@ -47,7 +60,8 @@ class AuthController extends Controller {
         ], 201);
     }
 
-    public function login(Request $request) {
+    public function login(Request $request)
+    {
         $request->validate([
             'email' => 'required|email',
             'password' => 'required',
@@ -72,7 +86,8 @@ class AuthController extends Controller {
         ]);
     }
 
-    public function logout(Request $request) {
+    public function logout(Request $request)
+    {
         $request->user()->currentAccessToken()->delete();
         return response()->json(['message' => 'Sesión cerrada correctamente']);
     }

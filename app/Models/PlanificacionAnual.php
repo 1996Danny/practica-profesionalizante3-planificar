@@ -3,11 +3,15 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes; // 1. Importar
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Builder;
 
 class PlanificacionAnual extends Model
 {
+    use SoftDeletes;
+
     protected $table = 'planificacion_anual';
 
     protected $fillable = [
@@ -24,11 +28,8 @@ class PlanificacionAnual extends Model
 
     protected $casts = [
         'fecha_presentacion' => 'date',
+        'deleted_at' => 'datetime',
     ];
-
-    // ─────────────────────────────────────────
-    // RELACIONES
-    // ─────────────────────────────────────────
 
     public function area(): BelongsTo
     {
@@ -45,21 +46,14 @@ class PlanificacionAnual extends Model
         return $this->hasMany(EstadoAnual::class, 'planificacion_anual_id');
     }
 
-    // ─────────────────────────────────────────
-    // SCOPES (filtros reutilizables)
-    // ─────────────────────────────────────────
-
-    /**
-     * Scope para filtrar por el último estado activo.
-     * Uso: PlanificacionAnual::estadoActual('Pendiente')->get()
-     */
     public function scopeEstadoActual($query, string $estado)
     {
         return $query->whereHas('estados', function ($q) use ($estado) {
             $q->where('estado', $estado)
                 ->whereRaw('fecha = (
-                  SELECT MAX(ea2.fecha) FROM estados_anual ea2
-                  WHERE ea2.planificacion_anual_id = estados_anual.planificacion_anual_id
+                    SELECT MAX(ea2.fecha)
+                    FROM estados_anual ea2
+                    WHERE ea2.planificacion_anual_id = estados_anual.planificacion_anual_id
               )');
         });
     }
