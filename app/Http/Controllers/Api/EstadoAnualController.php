@@ -3,161 +3,70 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\EstadoAnual;
-use App\Models\PlanificacionAnual;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\JsonResponse;
 
 class EstadoAnualController extends Controller
 {
     /**
-     * GET /api/planificaciones/anuales/{id}/estados
-     * Ver historial completo de estados
+     * El Docente envía la planificación al director
      */
-    public function index(int $id): JsonResponse
+    public function enviarRevision(Request $request, $id): JsonResponse
     {
-        $planificacion = PlanificacionAnual::find($id);
+        try {
+            // Insertamos el nuevo estado en la tabla estados_anual
+            DB::table('estados_anual')->insert([
+                'estado' => 'Enviada',
+                'fecha' => now()->toDateString(),
+                'planificacion_anual_id' => $id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
 
-        if (!$planificacion) {
-            return response()->json([
-                'message' => 'Planificación no encontrada'
-            ], 404);
+            return response()->json(['Mensaje' => 'Planificación enviada al Director con éxito.'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['Mensaje' => 'Error al enviar', 'Error' => $e->getMessage()], 500);
         }
-
-        $estados = EstadoAnual::where('planificacion_anual_id', $id)
-            ->orderBy('fecha', 'desc')
-            ->orderBy('id', 'desc')
-            ->get();
-
-        return response()->json([
-            'planificacion_id' => $id,
-            'estado_actual'    => $estados->first()?->estado ?? 'SIN_ESTADO',
-            'historial'        => $estados
-        ]);
     }
 
     /**
-     * POST /api/planificaciones/anuales/{id}/estados/enviar-revision
-     * Docente envía a revisión
+     * El Director Aprueba la planificación
      */
-    public function enviarRevision(int $id): JsonResponse
+    public function aprobar(Request $request, $id): JsonResponse
     {
-        $planificacion = PlanificacionAnual::find($id);
+        try {
+            DB::table('estados_anual')->insert([
+                'estado' => 'Aprobada',
+                'fecha' => now()->toDateString(),
+                'planificacion_anual_id' => $id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
 
-        if (!$planificacion) {
-            return response()->json([
-                'message' => 'Planificación no encontrada'
-            ], 404);
+            return response()->json(['Mensaje' => 'Planificación aprobada con éxito.'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['Mensaje' => 'Error al aprobar', 'Error' => $e->getMessage()], 500);
         }
-
-        $estadoActual = $planificacion->estados()
-            ->latest('fecha')
-            ->latest('id')
-            ->first();
-
-        $estadoActualNombre = $estadoActual?->estado ?? EstadoAnual::BORRADOR;
-
-        $transicionesPermitidas = EstadoAnual::TRANSICIONES[$estadoActualNombre] ?? [];
-
-        if (!in_array(EstadoAnual::EN_REVISION, $transicionesPermitidas)) {
-            return response()->json([
-                'message'                 => "No se puede enviar a revisión desde el estado: {$estadoActualNombre}",
-                'estado_actual'           => $estadoActualNombre,
-                'transiciones_permitidas' => $transicionesPermitidas
-            ], 422);
-        }
-
-        $nuevoEstado = EstadoAnual::create([
-            'estado'                 => EstadoAnual::EN_REVISION,
-            'fecha'                  => now()->toDateString(),
-            'planificacion_anual_id' => $id,
-        ]);
-
-        return response()->json([
-            'message'      => 'Planificación enviada a revisión correctamente',
-            'estado_nuevo' => $nuevoEstado->estado,
-            'fecha'        => $nuevoEstado->fecha,
-        ], 201);
     }
 
     /**
-     * POST /api/planificaciones/anuales/{id}/estados/aprobar
-     * Director aprueba la planificación
+     * El Director Rechaza u Observa la planificación
      */
-    public function aprobar(int $id): JsonResponse
+    public function rechazar(Request $request, $id): JsonResponse
     {
-        $planificacion = PlanificacionAnual::find($id);
+        try {
+            DB::table('estados_anual')->insert([
+                'estado' => 'Rechazada',
+                'fecha' => now()->toDateString(),
+                'planificacion_anual_id' => $id,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
 
-        if (!$planificacion) {
-            return response()->json([
-                'message' => 'Planificación no encontrada'
-            ], 404);
+            return response()->json(['Mensaje' => 'Planificación rechazada/observada.'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['Mensaje' => 'Error al procesar rechazo', 'Error' => $e->getMessage()], 500);
         }
-
-        $estadoActual = $planificacion->estados()
-            ->latest('fecha')
-            ->latest('id')
-            ->first();
-
-        $estadoActualNombre = $estadoActual?->estado ?? EstadoAnual::BORRADOR;
-
-        if ($estadoActualNombre !== EstadoAnual::EN_REVISION) {
-            return response()->json([
-                'message'       => 'Solo se pueden aprobar planificaciones en EN_REVISION',
-                'estado_actual' => $estadoActualNombre
-            ], 422);
-        }
-
-        $nuevoEstado = EstadoAnual::create([
-            'estado'                 => EstadoAnual::APROBADO,
-            'fecha'                  => now()->toDateString(),
-            'planificacion_anual_id' => $id,
-        ]);
-
-        return response()->json([
-            'message'      => 'Planificación aprobada correctamente',
-            'estado_nuevo' => $nuevoEstado->estado,
-            'fecha'        => $nuevoEstado->fecha,
-        ], 201);
-    }
-
-    /**
-     * POST /api/planificaciones/anuales/{id}/estados/rechazar
-     * Director rechaza y devuelve a BORRADOR
-     */
-    public function rechazar(int $id): JsonResponse
-    {
-        $planificacion = PlanificacionAnual::find($id);
-
-        if (!$planificacion) {
-            return response()->json([
-                'message' => 'Planificación no encontrada'
-            ], 404);
-        }
-
-        $estadoActual = $planificacion->estados()
-            ->latest('fecha')
-            ->latest('id')
-            ->first();
-
-        $estadoActualNombre = $estadoActual?->estado ?? EstadoAnual::BORRADOR;
-
-        if ($estadoActualNombre !== EstadoAnual::EN_REVISION) {
-            return response()->json([
-                'message'       => 'Solo se pueden rechazar planificaciones en EN_REVISION',
-                'estado_actual' => $estadoActualNombre
-            ], 422);
-        }
-
-        $nuevoEstado = EstadoAnual::create([
-            'estado'                 => EstadoAnual::BORRADOR,
-            'fecha'                  => now()->toDateString(),
-            'planificacion_anual_id' => $id,
-        ]);
-
-        return response()->json([
-            'message'      => 'Planificación rechazada. Vuelve al estado BORRADOR para correcciones',
-            'estado_nuevo' => $nuevoEstado->estado,
-            'fecha'        => $nuevoEstado->fecha,
-        ], 201);
     }
 }

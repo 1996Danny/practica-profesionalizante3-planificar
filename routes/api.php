@@ -168,9 +168,6 @@ Route::post('persona-cargo-cursado', [PersonaCargoCursadoController::class, 'sto
 
 use App\Http\Controllers\PersonasController;
 use App\Http\Controllers\CursosController;
-# use App\Http\Controllers\PersonasController;
-# use App\Http\Controllers\CursosController;
-// use App\Http\Controllers\PlanificacionAnualController;
 
 
 Route::get('/user', function (Request $request) {
@@ -179,25 +176,6 @@ Route::get('/user', function (Request $request) {
 
 Route::apiResource('areas', areasController::class);
 Route::apiResource('estados_anual',estados_anualController::class);
-
-// //                          RUTAS planificacion_diaria
-
-// // Esta ruta muestra todas las planificaciones diarias de la base de datos en formato JSON.
-// Route::get('/planificacion_diaria', [PlanificacionDiariaController::class, 'index']);
-
-// // Esta ruta muestra una planificación diaria de la base de datos en formato JSON según su id.
-// Route::get('/planificacion_diaria/{id}', [PlanificacionDiariaController::class, 'show']);
-
-// // Esta ruta agrega una planificación diaria a la base de datos en formato JSON.
-// Route::post('/planificacion_diaria', [PlanificacionDiariaController::class, 'store']);
-
-// // Esta ruta borra una planificacion diaria de la base de datos en formato JSON según su id.
-// Route::delete('/planificacion_diaria/{id}', [PlanificacionDiariaController::class, 'destroy']);
-
-// // Esta ruta actualiza una planificacion diaria de la base de datos en formato JSON según su id.
-// Route::put('/planificacion_diaria/{id}', [PlanificacionDiariaController::class, 'update']);
-
-
 
 
 //                          RUTAS estados_diaria
@@ -230,8 +208,6 @@ Route::put('/cursos/{id}', [CursosController::class,'update']);
 Route::delete('/cursos/{id}', [CursosController::class,'destroy']);
 
 use App\Http\Controllers\PersonaCargosController;
-
-
 Route::get('/persona_cargos', [PersonaCargosController::class, 'index']);
 Route::get('/persona_cargos/{id}', [PersonaCargosController::class, 'show']);
 Route::put('/persona_cargos/{id}', [PersonaCargosController::class, 'update']);
@@ -251,10 +227,3 @@ Route::get('/sit_revista/{id}', [SitRevistaController::class, 'show']);
 Route::post('/sit_revista', [SitRevistaController::class, 'store']);
 Route::put('/sit_revista/{id}', [SitRevistaController::class, 'update']);
 Route::delete('/sit_revista/{id}', [SitRevistaController::class, 'destroy']);
-
-// Rutas para el controlador Planificacion Anual
-// Route::get('/planificacion-anual', [PlanificacionAnualController::class, 'index']);
-// Route::post('/planificacion-anual', [PlanificacionAnualController::class, 'store']);
-// Route::get('/planificacion-anual/{id}', [PlanificacionAnualController::class, 'show']);
-// Route::put('/planificacion-anual/{id}', [PlanificacionAnualController::class, 'update']);
-// Route::delete('/planificacion-anual/{id}', [PlanificacionAnualController::class, 'destroy']);
