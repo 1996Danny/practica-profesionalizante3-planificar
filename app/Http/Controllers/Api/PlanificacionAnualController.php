@@ -117,60 +117,60 @@ class PlanificacionAnualController extends Controller
     }
 
 public function update(Request $request, int $id): JsonResponse
-    {
-        try {
-            $planificacion = PlanificacionAnual::find($id);
+{
+    try {
+        $planificacion = PlanificacionAnual::find($id);
 
-            if (!$planificacion) {
-                return response()->json([
-                    'Mensaje' => 'Planificación no encontrada'
-                ], 404);
-            }
-
-            // Validamos los campos dinámicos que viajan modificados desde Quill
-            $validated = $request->validate([
-                'fecha_presentacion'       => 'sometimes|date',
-                'aprendizajes_esperados'   => 'sometimes|string',
-                'saberes'                  => 'sometimes|string',
-                'criterios'                => 'sometimes|string',
-                'bibliografia'             => 'sometimes|string',
-                'diagnostico'              => 'sometimes|string',
-                'areas_id'                 => 'sometimes|exists:areas,id',
-                'persona_cargo_cursado_id' => 'sometimes|exists:persona_cargo_cursado,id',
-                'tipo_planificacion'       => 'sometimes|string|max:255',
-            ]);
-
-            // 1. Impactamos la actualización física en la tabla principal
-            $planificacion->update($validated);
-
-            // 2. 🔄 RESTABLECIMIENTO DEL ESTADO AUTOMÁTICO EN LA INTERFAZ
-            // Para cerrar el ciclo, inyectamos una fila en estados_anual marcando que volvió a ser "Borrador"
-            \Illuminate\Support\Facades\DB::table('estados_anual')->insert([
-                'estado' => 'Borrador',
-                'fecha' => now()->toDateString(),
-                'observaciones' => null, // Reseteamos las observaciones viejas
-                'planificacion_anual_id' => $planificacion->id,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-
-            return response()->json([
-                'Mensaje' => 'Planificación actualizada y regresada a estado borrador con éxito.',
-                'data' => $planificacion
-            ], 200);
-
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return response()->json([
-                'Mensaje' => 'Error de validación en la actualización.',
-                'Errors' => $e->errors()
-            ], 422);
-        } catch (\Exception $e) {
-            return response()->json([
-                'Mensaje' => 'Error crítico al actualizar el registro en Laravel.',
-                'Error' => $e->getMessage()
-            ], 500);
+        if (!$planificacion) {
+            return response()->json(['Mensaje' => 'Planificación no encontrada'], 404);
         }
+
+        // 1. Validamos los datos institucionales fijos
+        $request->validate([
+            'fecha_presentacion'        => 'sometimes|date',
+            'tipo_planificacion'        => 'sometimes|string|max:255',
+            'areas_id'                  => 'sometimes|exists:areas,id',
+            'persona_cargo_cursado_id'  => 'sometimes|integer',
+        ]);
+
+        // 2. Asignación normal de campos estructurales
+        if ($request->has('fecha_presentacion')) $planificacion->fecha_presentacion = $request->fecha_presentacion;
+        if ($request->has('areas_id')) $planificacion->areas_id = $request->areas_id;
+        if ($request->has('persona_cargo_cursado_id')) $planificacion->persona_cargo_cursado_id = $request->persona_cargo_cursado_id;
+        if ($request->has('tipo_planificacion')) $planificacion->tipo_planificacion = $request->tipo_planificacion;
+
+        // 3. 🚀 ASIGNACIÓN DIRECTA SIN FILTROS DESTRUCTIVOS EN PHP
+        // Con esto, Laravel guardará exactamente lo que el usuario escribió en Quill.
+        // Si el campo viene vacío, le ponemos un string vacío de respaldo para evitar valores nulos.
+        $planificacion->saberes                = $request->input('saberes') ?? '';
+        $planificacion->aprendizajes_esperados  = $request->input('aprendizajes_esperados') ?? '';
+        $planificacion->criterios              = $request->input('criterios') ?? '';
+        $planificacion->diagnostico            = $request->input('diagnostico') ?? '';
+        $planificacion->bibliografia           = $request->input('bibliografia') ?? '';
+
+        $planificacion->save();
+
+        // 4. Registro de Auditoría de Estados
+        \Illuminate\Support\Facades\DB::table('estados_anual')->insert([
+            'estado' => 'Borrador',
+            'fecha' => now()->toDateString(),
+            'observaciones' => null,
+            'planificacion_anual_id' => $planificacion->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'Mensaje' => 'Planificación actualizada y regresada a estado borrador con éxito.',
+            'data' => $planificacion
+        ], 200);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json(['Mensaje' => 'Error de validación.', 'Errors' => $e->errors()], 422);
+    } catch (\Exception $e) {
+        return response()->json(['Mensaje' => 'Error crítico en Laravel.', 'Error' => $e->getMessage()], 500);
     }
+}
 
     public function destroy(int $id): JsonResponse
     {

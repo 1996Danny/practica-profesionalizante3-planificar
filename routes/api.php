@@ -100,10 +100,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // ──────────────────────────────────────────
     // DASHBOARD UNIFICADO (Rutas dinámicas con {id} al final de todo 🛑)
     // ──────────────────────────────────────────
-Route::get('/planificaciones', [PlanificacionController::class, 'index'])
+    Route::get('/planificaciones', [PlanificacionController::class, 'index'])
         ->middleware('role:admin,director,docente');
 
     Route::get('/planificaciones/{id}', [PlanificacionController::class, 'show'])
+        ->middleware('role:admin,director,docente');
+
+    // NUEVA RUTA AGREGADA PARA PERMITIR LA ACTUALIZACIÓN (PUT)
+    Route::put('/planificaciones/{id}', [PlanificacionController::class, 'update'])
         ->middleware('role:admin,director,docente');
 
     // ──────────────────────────────────────────
