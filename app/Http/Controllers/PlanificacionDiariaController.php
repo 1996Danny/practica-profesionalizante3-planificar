@@ -10,12 +10,34 @@ class PlanificacionDiariaController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request): JsonResponse
     {
-        return DB::table('planificacion_diaria') -> get();
-        //
-    }
+        $user = $request->user();
 
+        $query = PlanificacionDiaria::with([
+            'personaCargoCursado.personaCargo.persona',
+            'personaCargoCursado.cursado.curso',
+            'estados' // Si tiene estados configurados
+        ]);
+
+        // 🔐 SI ES DOCENTE: Solo ve sus planificaciones diarias
+        if ($user && $user->role === 'docente') {
+            $query->whereHas('personaCargoCursado.personaCargo.persona.user', function ($q) use ($user) {
+                $q->where('id', $user->id);
+            });
+        }
+
+        // 👁️ SI ES DIRECTOR
+        if ($user && $user->role === 'director') {
+            $query->whereHas('estados', function ($q) {
+                $q->where('estado', '!=', 'Borrador');
+            });
+        }
+
+        $planificaciones = $query->get();
+
+        return response()->json($planificaciones);
+    }
     /**
      * Show the form for creating a new resource.
      */
@@ -45,7 +67,6 @@ class PlanificacionDiariaController extends Controller
             ]);
 
             return response()->json(['mensaje' => 'La planificacion se agregado correctamente']);
-        //
     }
 
     /**

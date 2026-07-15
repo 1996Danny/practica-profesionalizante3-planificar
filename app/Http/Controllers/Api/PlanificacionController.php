@@ -11,21 +11,45 @@ use Illuminate\Support\Facades\DB;
 
 class PlanificacionController extends Controller
 {
-    /**
-     * TEST 9: Dashboard unificado - Lista todas las planificaciones
-     */
-    public function index(): JsonResponse
+
+    public function index(Request $request): JsonResponse
     {
-        $anuales = PlanificacionAnual::with([
+        $user = $request->user();
+
+        $anualesQuery = PlanificacionAnual::with([
             'area',
             'personaCargoCursado.personaCargo.persona',
             'personaCargoCursado.cursado.curso'
-        ])->get();
+        ]);
 
-        $diarias = PlanificacionDiaria::with([
+        $diariasQuery = PlanificacionDiaria::with([
             'personaCargoCursado.personaCargo.persona',
             'personaCargoCursado.cursado.curso'
-        ])->get();
+        ]);
+
+        if ($user->role === 'docente') {
+
+            $anualesQuery->whereHas('personaCargoCursado.personaCargo', function ($query) use ($user) {
+                $query->where('personas_id', $user->persona_id);
+            });
+
+            $diariasQuery->whereHas('personaCargoCursado.personaCargo', function ($query) use ($user) {
+                $query->where('personas_id', $user->persona_id);
+            });
+
+        } elseif ($user->role === 'director') {
+
+            $anualesQuery->whereHas('estados', function ($query) {
+                $query->where('estado', '!=', 'Borrador');
+            });
+
+            $diariasQuery->whereHas('estados', function ($query) {
+                $query->where('estado', '!=', 'Borrador');
+            });
+        }
+
+        $anuales = $anualesQuery->get();
+        $diarias = $diariasQuery->get();
 
         return response()->json([
             'anuales' => $anuales,
@@ -33,10 +57,6 @@ class PlanificacionController extends Controller
         ], 200);
     }
 
-    /**
-     * TEST 10: Ver una planificación específica
-     * Busca primero en anuales, luego en diarias
-     */
     public function show(int $id): JsonResponse
     {
         $plan = PlanificacionAnual::with([
@@ -60,11 +80,8 @@ class PlanificacionController extends Controller
             ], 404);
         }
 
-        // 🟢 FORZAMOS LA VERIFICACIÓN DE ATRIBUTOS ANTES DE ENVIAR EL JSON
-        // Si los nombres en tu base de datos varían, Eloquent los mapeará aquí de forma segura:
         $responseData = $plan->toArray();
 
-        // Aseguramos que existan las llaves en el JSON que va hacia Vue
         $responseData['saberes'] = $plan->saberes ?? '';
         $responseData['criterios'] = $plan->criterios ?? '';
         $responseData['diagnostico'] = $plan->diagnostico ?? '';
@@ -74,9 +91,6 @@ class PlanificacionController extends Controller
         return response()->json($responseData, 200);
     }
 
-    /**
-     * NUEVO: Actualizar una planificación desde el dashboard unificado
-     */
 public function update(Request $request, $id)
 {
     try {
@@ -89,7 +103,6 @@ public function update(Request $request, $id)
         }
         if ($request->has('tipo_planificacion')) $plan->tipo_planificacion = $request->tipo_planificacion;
 
-        // 🌟 Forzamos la actualización manual de los contenidos enriquecidos
         $plan->saberes = $request->input('saberes', '');
         $plan->aprendizajes_esperados = $request->input('aprendizajes_esperados', '');
         $plan->criterios = $request->input('criterios', '');
@@ -98,7 +111,6 @@ public function update(Request $request, $id)
 
         $plan->save();
 
-        // 🔄 Historial de Estados
         \Illuminate\Support\Facades\DB::table('estados_anual')->insert([
             'estado' => 'Borrador',
             'fecha' => now()->toDateString(),
